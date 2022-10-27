@@ -92,7 +92,7 @@ def compute_features(file_suffix,per_time=False,first_x_ms=0,per_nth_spike=False
     
     
             
-    cell_id_list=pd.read_csv(filepath_or_buffer="/Users/julienballbe/My_Work/Lantyer_Data/Cell_id_list.csv")
+    cell_id_list=pd.read_csv(filepath_or_buffer="/Users/julienballbe/My_Work/Lantyer_Data/Lantyer_Cell_id_list.csv")
     cell_id_list=cell_id_list.iloc[:,1]
     
     
@@ -149,28 +149,34 @@ def import_spike_time_table(cell_id):
     stim_spike_file= pd.read_csv(filepath_or_buffer=str('/Users/julienballbe/My_Work/Lantyer_Data/Stim_spike_tables/'+str(cell_id)+'_stim_spike_table.csv'))
     stim_spike_file=stim_spike_file.loc[:,'Trace_id':]
     stim_spike_table=stim_spike_table=pd.DataFrame(columns=['Trace_id',
-                                           "Sweep_id",
-                                           'Stim_amp_pA',
-                                           'Stim_start_s',
-                                           'Stim_end_s', 
-                                           'Spike_times_s',
-                                           'Spike_thresh_time_s',
-                                           'Spike_thresh_pot_mV',
-                                           'Spike_peak_time_s',
-                                           'Spike_peak_pot_mV',
-                                           'Spike_upstroke_time_s',
-                                           'Spike_upstroke_pot_mV',
-                                           'Spike_downstroke_time_s',
-                                           'Spike_downstroke_pot_mV',
-                                           'Trough_time_s',
-                                           'Trough_pot_mV'])
+          "Sweep_id",
+          'Stim_amp_pA',
+          'Stim_baseline_pA',
+          'Stim_start_s',
+          'Stim_end_s', 
+          'Membrane_potential_SS_mV',
+          "Membrane_baseline_mV",
+          'Spike_times_s',
+          'Spike_thresh_time_s',
+          'Spike_thresh_pot_mV',
+          'Spike_peak_time_s',
+          'Spike_peak_pot_mV',
+          'Spike_upstroke_time_s',
+          'Spike_upstroke_pot_mV',
+          'Spike_downstroke_time_s',
+          'Spike_downstroke_pot_mV',
+          'Trough_time_s',
+          'Trough_pot_mV'])
     
     for line in range(stim_spike_file.shape[0]):
         new_line=pd.Series([str(stim_spike_file.loc[line,"Trace_id"]),
                       int(stim_spike_file.loc[line,"Sweep_id"]),
                       stim_spike_file.loc[line,"Stim_amp_pA"],
+                      stim_spike_file.loc[line,"Stim_baseline_pA"],
                       stim_spike_file.loc[line,"Stim_start_s"],
                       stim_spike_file.loc[line,"Stim_end_s"],
+                      stim_spike_file.loc[line,"Membrane_potential_SS_mV"],
+                      stim_spike_file.loc[line,"Membrane_baseline_mV"],
                       np.array(pd.eval(stim_spike_file.loc[line,"Spike_times_s"])),
                       np.array(pd.eval(stim_spike_file.loc[line,"Spike_thresh_time_s"])),
                       np.array(pd.eval(stim_spike_file.loc[line,"Spike_thresh_pot_mV"])),
@@ -183,21 +189,24 @@ def import_spike_time_table(cell_id):
                       np.array(pd.eval(stim_spike_file.loc[line,"Trough_time_s"])),
                       np.array(pd.eval(stim_spike_file.loc[line,"Trough_pot_mV"]))],
                             index=['Trace_id',
-                            "Sweep_id",
-                            'Stim_amp_pA',
-                            'Stim_start_s',
-                            'Stim_end_s', 
-                            'Spike_times_s',
-                            'Spike_thresh_time_s',
-                            'Spike_thresh_pot_mV',
-                            'Spike_peak_time_s',
-                            'Spike_peak_pot_mV',
-                            'Spike_upstroke_time_s',
-                            'Spike_upstroke_pot_mV',
-                            'Spike_downstroke_time_s',
-                            'Spike_downstroke_pot_mV',
-                            'Trough_time_s',
-                            'Trough_pot_mV'])
+                                  "Sweep_id",
+                                  'Stim_amp_pA',
+                                  'Stim_baseline_pA',
+                                  'Stim_start_s',
+                                  'Stim_end_s', 
+                                  'Membrane_potential_SS_mV',
+                                  "Membrane_baseline_mV",
+                                  'Spike_times_s',
+                                  'Spike_thresh_time_s',
+                                  'Spike_thresh_pot_mV',
+                                  'Spike_peak_time_s',
+                                  'Spike_peak_pot_mV',
+                                  'Spike_upstroke_time_s',
+                                  'Spike_upstroke_pot_mV',
+                                  'Spike_downstroke_time_s',
+                                  'Spike_downstroke_pot_mV',
+                                  'Trough_time_s',
+                                  'Trough_pot_mV'])
         stim_spike_table = stim_spike_table.append(new_line, ignore_index=True)
     
     return stim_spike_table
@@ -500,7 +509,23 @@ def extract_stim_freq_Lantyer(cell_id,per_time=False,first_x_ms=0,per_nth_spike=
     f_I_table['Sweep_number']=np.int64(f_I_table['Sweep_number'])
     f_I_table['Frequency_Hz']=np.float64(f_I_table['Frequency_Hz'])
     
-    return f_I_table
+    f_I_table=f_I_table.sort_values(by=["Cell_id", 'Stim_amp_pA'])
+    freq_array=f_I_table.iloc[:,3].values
+
+    step_array=np.diff(f_I_table.loc[:,"Frequency_Hz"])
+    if np.count_nonzero(freq_array)!=0:
+        first_non_zero_index=next(x for x, val in enumerate(freq_array) if val !=0 )
+        if 0 in freq_array[first_non_zero_index:]:
+            do_fit=False
+            return f_I_table,do_fit
+    
+    if np.count_nonzero(freq_array)==0 or np.count_nonzero(freq_array)<4 or np.count_nonzero(step_array)<3  :
+        do_fit=False
+        return f_I_table,do_fit
+    
+    else:
+        do_fit=True
+    return f_I_table,do_fit
 #%%
 
 def fit_specimen_fi_slope(stim_amps, avg_rates):
@@ -589,90 +614,84 @@ def sigmoid_heaviside(x,sigmoid_amplitude,sigmoid_center,sigmoid_sigma,heaviside
  
 def heaviside_fit_sigmoid_Lantyer (cell_id,per_time=False,first_x_ms=0,per_nth_spike=False,first_nth_spike=0,do_plot=False):
     try:
-
          
          # extract f_I table for the specimen and use only the "coarse" annotated sweeps
-         f_I_table=extract_stim_freq_Lantyer(cell_id,per_time=per_time,first_x_ms=first_x_ms,per_nth_spike=per_nth_spike,first_nth_spike=first_nth_spike)
-         
+         f_I_table,do_fit=extract_stim_freq_Lantyer(cell_id,per_time=per_time,first_x_ms=first_x_ms,per_nth_spike=per_nth_spike,first_nth_spike=first_nth_spike)
+         if do_fit ==False:
+             fit='Not_enough_data'
+             return ("Not_enough_data",np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan)
          
          x_data=f_I_table.loc[:,'Stim_amp_pA']
          y_data=f_I_table.loc[:,"Frequency_Hz"]
          
          #get initial estimate of parameters for single sigmoid fit
          without_zero_index=next(x for x, val in enumerate(y_data) if val >0 )
-
-         
          median_firing_rate_index=next(x for x, val in enumerate(y_data) if val >= np.median(y_data.iloc[without_zero_index:]))
+         
          #Get the stimulus amplitude correspondingto the median non-zero firing rate
          x0=x_data.iloc[median_firing_rate_index]
-         #Get the slope from the linear fit of the firing rate
-         slope,intercept=fit_specimen_fi_slope(x_data,y_data)
          
+         #Get the slope from the linear fit of the firing rate
+
+         slope,intercept=fit_specimen_fi_slope(x_data[without_zero_index:],y_data[without_zero_index:])
          first_non_zero_x=x_data.iloc[without_zero_index]
          new_x_data=pd.Series(np.arange(min(x_data),max(x_data),1))
          first_non_zero_extended_x_index=next(x for x, val in enumerate(new_x_data) if val >=first_non_zero_x )
+         
+         best_single_QNRMSE=np.nan
          best_single_amplitude=np.nan
          best_single_center=np.nan
          best_single_sigma=np.nan
-         best_compo_QNRMSE=None
-         best_sigmoid_amplitude=np.nan
-         best_sigmoid_center=np.nan
-         best_sigmoid_sigma=np.nan
          
-         best_heaviside_step=np.nan
-         best_sigmoid_amplitude=np.nan
-         best_sigmoid_center=np.nan
-         best_sigmoid_sigma=np.nan
+         
+         max_freq_step_index=np.argmax(y_data.diff())
+         freq_step_array=y_data.diff()
+         stim_step_array=x_data.diff()
 
-         best_single_QNRMSE=None
+         max_freq_step=freq_step_array[max_freq_step_index]
+         max_stim_step=stim_step_array[max_freq_step_index]
+         normalized_step=max_freq_step/max_stim_step
+         
+
          fit='Rejected'
+
          typeII_tested=False
-         
-         ##First, try to fit a single sigmoid
-         params_single_sigmoid=Parameters()
-         params_single_sigmoid.add('single_sigmoid_amplitude',value=max(y_data),min=0)
-         params_single_sigmoid.add('single_sigmoid_center',value=x0)
-         params_single_sigmoid.add('single_sigmoid_sigma',value=500,min=0.1)
-         params_single_sigmoid['single_sigmoid_amplitude'].set(brute_step=20)
-         params_single_sigmoid['single_sigmoid_center'].set(brute_step=21)
-         params_single_sigmoid['single_sigmoid_sigma'].set(brute_step=31)
+         initial_sigma=max(y_data)/(4*slope)
 
-         single_sigmoid_fitter=Minimizer(single_sigmoid_to_minimize,params_single_sigmoid,fcn_args=(x_data,y_data))
+         if normalized_step<1.5: #If the highest step is not too high, try to fit single sigmoid
 
-         single_result_brute=single_sigmoid_fitter.minimize(method='brute',Ns=10,keep=10)
+             ##First, try to fit a single sigmoid
+             params_single_sigmoid=Parameters()
+             params_single_sigmoid.add('single_sigmoid_amplitude',value=2*max(y_data))
+             params_single_sigmoid.add('single_sigmoid_center',value=x0,min=x0)
+             params_single_sigmoid.add('single_sigmoid_sigma',value=initial_sigma)
+             params_single_sigmoid['single_sigmoid_amplitude'].set(brute_step=max(y_data)/5)
+             params_single_sigmoid['single_sigmoid_center'].set(brute_step=x0/5)
+             params_single_sigmoid['single_sigmoid_sigma'].set(brute_step=(initial_sigma+1)/5)
+    
+             single_sigmoid_fitter=Minimizer(single_sigmoid_to_minimize,params_single_sigmoid,fcn_args=(x_data,y_data))
+    
+             single_result_brute=single_sigmoid_fitter.minimize(method='brute',Ns=10,keep=10)
+    
 
-         
-
-         #plot_results_brute(single_result_brute,best_vals=True,varlabels=None)
-         for current_single_result in single_result_brute.candidates:
-
-             current_single_sigmoid_amplitude=current_single_result.params["single_sigmoid_amplitude"].value
-             current_single_sigmoid_center=current_single_result.params["single_sigmoid_center"].value
-             current_single_sigmoid_sigma=current_single_result.params["single_sigmoid_sigma"].value
-
-             single_sigmoid_mod=StepModel(form='logistic',prefix='single_sigmoid_')
-             single_sigmoid_mod_params=single_sigmoid_mod.make_params()
-             single_sigmoid_mod_params['single_sigmoid_amplitude'].set(value=current_single_sigmoid_amplitude)
-             single_sigmoid_mod_params['single_sigmoid_center'].set(value=current_single_sigmoid_center)
-             single_sigmoid_mod_params['single_sigmoid_sigma'].set(value=current_single_sigmoid_sigma)
-             
-             single_sigmoid_out=single_sigmoid_mod.fit(y_data,single_sigmoid_mod_params,x=x_data)
-             current_best_single_sigmoid_amplitude=single_sigmoid_out.best_values['single_sigmoid_amplitude']
-             current_best_single_sigmoid_center=single_sigmoid_out.best_values['single_sigmoid_center']
-             current_best_single_sigmoid_sigma=single_sigmoid_out.best_values['single_sigmoid_sigma']
-             true=y_data.iloc[without_zero_index:]
-             pred=pd.Series(sigmoid_function(x_data.iloc[without_zero_index:],current_best_single_sigmoid_amplitude,
-                                                                                    current_best_single_sigmoid_center,
-                                                                                    current_best_single_sigmoid_sigma))
-             pred_extended=pd.Series(sigmoid_function(new_x_data.loc[first_non_zero_extended_x_index:],current_best_single_sigmoid_amplitude,
-                                                                                    current_best_single_sigmoid_center,
-                                                                                    current_best_single_sigmoid_sigma))
-
-             if best_single_QNRMSE==None or best_single_QNRMSE>normalized_root_mean_squared_error(true,pred,pred_extended):
+    
+            #plot_results_brute(single_result_brute,best_vals=True,varlabels=None)
+             for current_single_result in single_result_brute.candidates:
+    
+                 current_single_sigmoid_amplitude=current_single_result.params["single_sigmoid_amplitude"].value
+                 current_single_sigmoid_center=current_single_result.params["single_sigmoid_center"].value
+                 current_single_sigmoid_sigma=current_single_result.params["single_sigmoid_sigma"].value
+    
+                 single_sigmoid_mod=StepModel(form='logistic',prefix='single_sigmoid_')
+                 single_sigmoid_mod_params=single_sigmoid_mod.make_params()
+                 single_sigmoid_mod_params['single_sigmoid_amplitude'].set(value=current_single_sigmoid_amplitude)
+                 single_sigmoid_mod_params['single_sigmoid_center'].set(value=current_single_sigmoid_center)
+                 single_sigmoid_mod_params['single_sigmoid_sigma'].set(value=current_single_sigmoid_sigma)
                  
-                 best_single_amplitude=current_best_single_sigmoid_amplitude
-                 best_single_center=current_best_single_sigmoid_center
-                 best_single_sigma=current_best_single_sigmoid_sigma
+                 single_sigmoid_out=single_sigmoid_mod.fit(y_data,single_sigmoid_mod_params,x=x_data)
+                 current_best_single_sigmoid_amplitude=single_sigmoid_out.best_values['single_sigmoid_amplitude']
+                 current_best_single_sigmoid_center=single_sigmoid_out.best_values['single_sigmoid_center']
+                 current_best_single_sigmoid_sigma=single_sigmoid_out.best_values['single_sigmoid_sigma']
                  true=y_data.iloc[without_zero_index:]
                  pred=pd.Series(sigmoid_function(x_data.iloc[without_zero_index:],current_best_single_sigmoid_amplitude,
                                                                                         current_best_single_sigmoid_center,
@@ -680,24 +699,70 @@ def heaviside_fit_sigmoid_Lantyer (cell_id,per_time=False,first_x_ms=0,per_nth_s
                  pred_extended=pd.Series(sigmoid_function(new_x_data.loc[first_non_zero_extended_x_index:],current_best_single_sigmoid_amplitude,
                                                                                         current_best_single_sigmoid_center,
                                                                                         current_best_single_sigmoid_sigma))
+                 
+                 if np.isnan(best_single_QNRMSE)==True or best_single_QNRMSE>normalized_root_mean_squared_error(true,pred,pred_extended):
+                     
+                     best_single_amplitude=current_best_single_sigmoid_amplitude
+                     best_single_center=current_best_single_sigmoid_center
+                     best_single_sigma=current_best_single_sigmoid_sigma
+                     true=y_data.iloc[without_zero_index:]
+                     pred=pd.Series(sigmoid_function(x_data.iloc[without_zero_index:],current_best_single_sigmoid_amplitude,
+                                                                                            current_best_single_sigmoid_center,
+                                                                                            current_best_single_sigmoid_sigma))
+                     pred_extended=pd.Series(sigmoid_function(new_x_data.loc[first_non_zero_extended_x_index:],current_best_single_sigmoid_amplitude,
+                                                                                            current_best_single_sigmoid_center,
+                                                                                            current_best_single_sigmoid_sigma))
+    
+                     best_single_QNRMSE=normalized_root_mean_squared_error(true,pred,pred_extended)
+    
+            
+             single_sigmoid_y_data=pd.Series(sigmoid_function(new_x_data,best_single_amplitude,
+                                                                                    best_single_center,
+                                                                                    best_single_sigma))
 
-                 best_single_QNRMSE=normalized_root_mean_squared_error(true,pred,pred_extended)
+             if best_single_QNRMSE<0.5:
+                 fit='TypeI'
+             else:
+                 fit='Rejected'
+                 best_single_amplitude=np.nan
+                 best_single_center=np.nan
+                 best_single_sigma=np.nan
+             typeI_tested=True
+         else:
+             fit='Rejected_step_too_high'
+             best_single_amplitude=np.nan
+             best_single_center=np.nan
+             best_single_sigma=np.nan
+             typeI_tested=False
 
-        
-         single_sigmoid_y_data=pd.Series(sigmoid_function(new_x_data,best_single_amplitude,
-                                                                                best_single_center,
-                                                                                best_single_sigma))
 
+         
 
-
-         if best_single_QNRMSE<0.5:
-             fit='TypeI'
-             
+         best_compo_QNRMSE=None
+         best_sigmoid_amplitude=np.nan
+         best_sigmoid_center=np.nan
+         best_sigmoid_sigma=np.nan
+         best_heaviside_step=np.nan
 
          ##Define condition to test double sigmoid fit
-         if best_single_QNRMSE<1e-3 or best_single_QNRMSE>0.5 or best_single_sigma<1:
+         do_typeII=False
+         if best_single_QNRMSE>0.5 and do_typeII==True  or do_typeII==True and normalized_step>1.5: # if best single Sigmoid fit is not good enough, or biggest frequency jump too high, test Type II fit
 
              params=Parameters()
+
+             # params.add('sigmoid_amplitude',value=2*max(y_data))
+             # params.add('sigmoid_center',value=x0,min=first_non_zero_x)
+             # params.add("sigmoid_sigma",value=100,min=40)
+            
+             # params.add('heaviside_step',value=x_data[max_freq_step_index])
+
+             
+             # params['sigmoid_amplitude'].set(brute_step=max(y_data)/5)
+             # params["sigmoid_center"].set(brute_step=x0/5)
+             # params["sigmoid_sigma"].set(brute_step=(initial_sigma+1)/5)
+            
+             # params['heaviside_step'].set(brute_step=20)
+
              params.add('sigmoid_amplitude',value=max(y_data),min=0)
              params.add('sigmoid_center',value=x0)
              params.add("sigmoid_sigma",value=104,min=40)
@@ -711,14 +776,13 @@ def heaviside_fit_sigmoid_Lantyer (cell_id,per_time=False,first_x_ms=0,per_nth_s
             
              params['heaviside_step'].set(brute_step=5)
 
-
              fitter=Minimizer(sigmoid_heaviside_to_minimize,params,fcn_args=(x_data,y_data))
 
-             result_brute=fitter.minimize(method='brute',Ns=20,keep=20)
+             result_brute=fitter.minimize(method='brute',Ns=15,keep=15)
              
 
     
-    
+
              for current_results in result_brute.candidates:
                   current_sigmoid_amplitude=current_results.params['sigmoid_amplitude'].value
                   current_sigmoid_center=current_results.params['sigmoid_center'].value
@@ -758,54 +822,50 @@ def heaviside_fit_sigmoid_Lantyer (cell_id,per_time=False,first_x_ms=0,per_nth_s
                       best_heaviside_step=compo_out.best_values['mid']
                       
                       
-
+                      
              computed_y_data=pd.Series(pd.Series(sigmoid_heaviside(new_x_data,best_sigmoid_amplitude,best_sigmoid_center,best_sigmoid_sigma,best_heaviside_step)))
             
              model_table=pd.DataFrame(np.column_stack((new_x_data,computed_y_data)),columns=["Stim_amp_pA","Frequency_Hz"])
 
              typeII_tested=True
-
-             if 2*best_compo_QNRMSE<=best_single_QNRMSE and best_compo_QNRMSE<0.1 and best_compo_QNRMSE>1e-4:
-                 fit= 'TypeII'
-             elif best_single_QNRMSE<0.5 and best_single_sigma>1:
-                 fit='TypeI'
+             if typeI_tested==True:
+                 if 2*best_compo_QNRMSE<=best_single_QNRMSE and best_compo_QNRMSE<0.1 and best_compo_QNRMSE>1e-4 or normalized_step>1.5 and best_compo_QNRMSE<0.1 and best_compo_QNRMSE>1e-4 :
+                     fit= 'TypeII'
+                 elif best_single_QNRMSE<0.5 and normalized_step<1.5 :
+                     fit='TypeI'
+                 else:
+                     fit='Rejected'
              else:
-                 fit='Rejected'
+                 if best_compo_QNRMSE<0.1 and best_compo_QNRMSE>1e-4 or normalized_step>1.5 and best_compo_QNRMSE<0.1 and best_compo_QNRMSE>1e-4 :
+                     fit= 'TypeII'
+                 else:
+                     fit="Rejected"
                  
         
-
          if best_compo_QNRMSE==None:
              best_compo_QNRMSE=np.nan
 
          
 
          if do_plot == True:
-              single_sigmoid_table=pd.DataFrame(np.column_stack((new_x_data,single_sigmoid_y_data)),columns=["Stim_amp_pA","Frequency_Hz"])
+              
               my_plot=ggplot(f_I_table,aes(x=f_I_table["Stim_amp_pA"],y=f_I_table["Frequency_Hz"]))+geom_point()
               
               if fit=='TypeII':
-                   compo_line='solid'
-                   single_line='dashed'
-                   my_plot+=geom_line(model_table,aes(x=model_table["Stim_amp_pA"],y=model_table['Frequency_Hz']),color='red',linetype=compo_line)
+                   
+                   my_plot+=geom_line(model_table,aes(x=model_table["Stim_amp_pA"],y=model_table['Frequency_Hz']),color='red')
               elif fit=='TypeI':
-                   compo_line='dashed'
-                   single_line='solid'
-
-                   if typeII_tested==True:
-
-                       my_plot+=geom_line(model_table,aes(x=model_table["Stim_amp_pA"],y=model_table['Frequency_Hz']),color='red',linetype=compo_line)
-
-              else:
-                  single_line="dashed"
-              
-              my_plot+=geom_line(single_sigmoid_table,aes(x=single_sigmoid_table["Stim_amp_pA"],y=single_sigmoid_table['Frequency_Hz']),color='blue',linetype=single_line)
-
-              my_plot+=ggtitle(str('F/I curve fit, Cell:'+str(cell_id)))
+                   single_sigmoid_table=pd.DataFrame(np.column_stack((new_x_data,single_sigmoid_y_data)),columns=["Stim_amp_pA","Frequency_Hz"])
+                   my_plot+=geom_line(single_sigmoid_table,aes(x=single_sigmoid_table["Stim_amp_pA"],y=single_sigmoid_table['Frequency_Hz']),color='blue')
+                   
+             
+              my_plot+=geom_abline(aes(intercept=intercept,slope=slope))
+              my_plot+=xlab(str("Stim_amp_pA_id: "+str(cell_id)))
               print(my_plot)
               
 
          
-        
+
          return fit,best_single_QNRMSE,best_single_amplitude,best_single_center,best_single_sigma,best_compo_QNRMSE,best_heaviside_step,best_sigmoid_amplitude,best_sigmoid_center,best_sigmoid_sigma
          
     except(StopIteration):
@@ -820,10 +880,11 @@ def heaviside_fit_sigmoid_Lantyer (cell_id,per_time=False,first_x_ms=0,per_nth_s
     except (RuntimeError):
          print("Can't fit sigmoid, least-square optimization failed")
         
-         return('Failed',np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan)
+         return("Failed",np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan)
     except (TypeError):
          print("Stop Type Error")
-         return('Failed',np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan)
+         return("Failed",np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan)
+     
 
         
 
@@ -835,8 +896,13 @@ def compute_f_I_params_Lantyer(fit_table,per_time=False,first_x_ms=0,per_nth_spi
     for current_cell_id in fit_table.loc[:,"Cell_id"]:
         current_fit_value=fit_table[fit_table['Cell_id']==str(current_cell_id)].Fit.values[0]
         
-        current_f_I_table=extract_stim_freq_Lantyer(current_cell_id,per_time=per_time,first_x_ms=first_x_ms,per_nth_spike=per_nth_spike,first_nth_spike=first_nth_spike)
-        
+        current_f_I_table,do_fit=extract_stim_freq_Lantyer(current_cell_id,per_time=per_time,first_x_ms=first_x_ms,per_nth_spike=per_nth_spike,first_nth_spike=first_nth_spike)
+        if do_fit==False:
+            new_line=pd.Series([str(current_cell_id),current_fit_value,np.nan,np.nan,np.nan],
+                           index=mycol)
+            f_I_params_table=f_I_params_table.append(new_line,ignore_index=True)
+
+            continue
 
         x_data=current_f_I_table.loc[:,'Stim_amp_pA']
         new_x_data=pd.Series(np.arange(min(x_data),max(x_data),0.1))
@@ -1217,10 +1283,41 @@ def fit_exponential_decay_Lantyer(cell_id,per_time=False,first_x_ms=0,per_spike_
 
     
     
+#%%
+def retrieve_original_cell_id(cell_id):
+    date_and_name,cell_trace=cell_id.split("_")
+    original_cell_id=str(str(date_and_name[:6])+'_'+str(date_and_name[6:8])+"_"+str(date_and_name[8:])+'_CC')
+    print(original_cell_id)
     
+def compute_input_resistance(cell_id,do_plot=False):
     
+    cell_table=import_spike_time_table(str(cell_id))
+    cell_table=cell_table[pd.isna(cell_table['Membrane_potential_SS_mV'])==False]
+    stim_amp=cell_table.loc[:,"Stim_amp_pA"]
+    stim_baseline=cell_table.loc[:,'Stim_baseline_pA']
+    membrane_SS=cell_table.loc[:,"Membrane_potential_SS_mV"]
+    membrane_baseline=cell_table.loc[:,'Membrane_baseline_mV']
     
+    input_resistance=np.mean((stim_amp-stim_baseline)/(membrane_SS-membrane_baseline))
+    sd_IR=np.sd((stim_amp-stim_baseline)/(membrane_SS-membrane_baseline))
     
+    return input_resistance,sd_IR,membrane_baseline.shape[0]
+        
+#%%
+def table_stim_freq_overtime_Lantyer(cell_id):
+    time_list=[5,10,25,50,100,250,500]
+
+    overtime_table=extract_stim_freq_Lantyer(cell_id,per_time=True,first_x_ms=time_list[0])
+
+    overtime_table=overtime_table.rename(columns={"Frequency_Hz":str(str(time_list[0])+'_ms')})
+
+    for current_time in time_list[1:]:
+        current_table=extract_stim_freq_Lantyer(cell_id,per_time=True,first_x_ms=current_time)
+        current_table=current_table.loc[:,["Stim_amp_pA","Frequency_Hz"]]
+        current_table=current_table.rename(columns={"Frequency_Hz":str(str(current_time)+'_ms')})
+        overtime_table=pd.merge(overtime_table,current_table,on="Stim_amp_pA")
+        
+    return overtime_table
     
     
     
